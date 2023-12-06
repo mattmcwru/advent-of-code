@@ -1,0 +1,6 @@
+# Attempt to ignore executable files (ones without extensions)
+*
+!*.*
+!*/
+
+*.o
