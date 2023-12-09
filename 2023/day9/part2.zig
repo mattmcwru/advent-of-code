@@ -58,16 +58,13 @@ pub fn processData(allocator: std.mem.Allocator, data_list: *const std.ArrayList
     defer diff_list.deinit();
 
     var all_zero = true;
-    var prev_val = data_list.items[0];
 
-    for (data_list.items[1..]) |val| {
-        var diff: DataType = val - prev_val;
-        if (diff != 0) all_zero = false;
-        try diff_list.append(diff);
-        prev_val = val;
+    for (1..data_list.items.len) |i| {
+        try diff_list.append(data_list.items[i] - data_list.items[i - 1]);
+        if (diff_list.getLast() != 0) all_zero = false;
     }
 
-    return if (all_zero) data_list.getLast() else data_list.items[0] - try processData(allocator, &diff_list);
+    return data_list.items[0] - if (all_zero) 0 else try processData(allocator, &diff_list);
 }
 
 test "processData" {
