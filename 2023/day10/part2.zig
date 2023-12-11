@@ -14,8 +14,20 @@ const getFileNameFromArgs = @import("libs/args.zig").getFileNameFromArgs; // "li
 // S is the starting position of the animal; there is a pipe on this tile, but your sketch doesn't show what shape the pipe has.
 
 const MapCoord = struct {
-    map_x: usize,
-    map_y: usize,
+    const T = usize;
+    map_x: T,
+    map_y: T,
+
+    const Op = enum { sub_x, sub_y, add_x, add_y };
+
+    pub fn doOp(self: MapCoord, value: T, op: Op) !MapCoord {
+        return switch (op) {
+            .add_x => .{ .map_x = try std.math.add(T, self.map_x, value), .map_y = self.map_y },
+            .add_y => .{ .map_x = self.map_x, .map_y = try std.math.add(T, self.map_y, value) },
+            .sub_x => .{ .map_x = try std.math.sub(T, self.map_x, value), .map_y = self.map_y },
+            .sub_y => .{ .map_x = self.map_x, .map_y = try std.math.sub(T, self.map_y, value) },
+        };
+    }
 };
 
 const MapNode = struct {
@@ -319,46 +331,36 @@ const PipeDir = struct {
 pub fn findPipeDir(start_pos: MapCoord, prev_dir: MapNode.Connector.Direction, map: *const std.AutoArrayHashMap(MapCoord, MapNode)) !PipeDir {
     const start_node = map.get(start_pos) orelse return error.StartNodeNotFound;
 
-    // Test West
-    if (prev_dir != .west and start_pos.map_x > 0) {
-        const test_coord = .{ .map_x = start_pos.map_x - 1, .map_y = start_pos.map_y };
-        if (map.get(test_coord)) |pos| {
-            //print("  {},{}  {any}\n", .{ pos.map_x, pos.map_y, pos.connector });
-            if (start_node.connector.isPipeConnected(pos.connector, .west))
-                return .{ .map_coord = test_coord, .direction = .west };
+    const dir_list = [_]MapNode.Connector.Direction{ .west, .east, .north, .south };
+    const op_list = [_]MapCoord.Op{ .sub_x, .add_x, .sub_y, .add_y };
+
+    for (dir_list, op_list) |dir, op| {
+        if (prev_dir != dir) {
+            const test_coord = start_pos.doOp(1, op) catch continue;
+            if (map.get(test_coord)) |pos| {
+                //print("  {},{}  {any}\n", .{ pos.map_x, pos.map_y, pos.connector });
+                if (start_node.connector.isPipeConnected(pos.connector, dir))
+                    return .{ .map_coord = test_coord, .direction = dir };
+            }
         }
     }
-
-    // Test North
-    if (prev_dir != .north and start_pos.map_y > 0) {
-        const test_coord = .{ .map_x = start_pos.map_x, .map_y = start_pos.map_y - 1 };
-        if (map.get(test_coord)) |pos| {
-            //print("  {},{}  {any}\n", .{ pos.map_x, pos.map_y, pos.connector });
-            if (start_node.connector.isPipeConnected(pos.connector, .north))
-                return .{ .map_coord = test_coord, .direction = .north };
-        }
-    }
-
-    // Test East
-    if (prev_dir != .east) {
-        const test_coord = .{ .map_x = start_pos.map_x + 1, .map_y = start_pos.map_y };
-        if (map.get(test_coord)) |pos| {
-            //print("  {},{}  {any}\n", .{ pos.map_x, pos.map_y, pos.connector });
-            if (start_node.connector.isPipeConnected(pos.connector, .east))
-                return .{ .map_coord = test_coord, .direction = .east };
-        }
-    }
-
-    // Test South
-    if (prev_dir != .south) {
-        const test_coord = .{ .map_x = start_pos.map_x, .map_y = start_pos.map_y + 1 };
-        if (map.get(test_coord)) |pos| {
-            //print("  {},{}  {any}\n", .{ pos.map_x, pos.map_y, pos.connector });
-            if (start_node.connector.isPipeConnected(pos.connector, .south))
-                return .{ .map_coord = test_coord, .direction = .south };
-        }
-    }
-
     print("Can not find starting direction\n", .{});
     return error.StartingDirectionNotFound;
+}
+
+test "usize underflow testing" {
+    const a: usize = 2;
+
+    // Test underflow with built-in sub function
+    const c = @subWithOverflow(a, a + 1);
+    print("\n{} {}\n", .{ c[0], c[1] });
+
+    // Test the error flow control using std.math.sub function
+    for (0..6) |i| {
+        defer print("\n", .{});
+        print("i = {}: b = ", .{i});
+
+        // This line should error for negative numbers and not print
+        print("{}", .{std.math.sub(usize, a, i) catch continue});
+    }
 }
